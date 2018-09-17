@@ -5,7 +5,6 @@
 
 namespace Graviton\MigrationBundle;
 
-use Graviton\BundleBundle\GravitonBundleInterface;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 
 /**
@@ -15,17 +14,6 @@ use Symfony\Component\HttpKernel\Bundle\Bundle;
  * @license  https://opensource.org/licenses/MIT MIT License
  * @link     http://swisscom.ch
  */
-class GravitonMigrationBundle extends Bundle implements GravitonBundleInterface
+class GravitonMigrationBundle extends Bundle
 {
-    /**
-     * {@inheritDoc}
-     *
-     * set up graviton symfony bundles
-     *
-     * @return \Symfony\Component\HttpKernel\Bundle\Bundle[]
-     */
-    public function getBundles()
-    {
-        return [];
-    }
 }

@@ -89,13 +89,8 @@ class MongodbMigrateCommand extends Command
      */
     public function execute(InputInterface $input, OutputInterface $output)
     {
-        // graviton root
-        $baseDir = __DIR__ . '/../../dn/';
-
-        // vendorized? - go back some more..
-        if (strpos($baseDir, '/vendor/') !== false) {
-            $baseDir .= '../../../';
-        }
+        // one level above vendor
+        $baseDir = __DIR__.'/../../../../../';
 
         $this->finder
             ->in($baseDir)
