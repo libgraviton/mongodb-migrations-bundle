@@ -14,7 +14,7 @@
     ],
     "require": {
         "php": ">=7.1.0",
-        "doesntmattr/mongodb-migrations": "^2.0.0",
+        "doesntmattr/mongodb-migrations": "dev-master",
         "doctrine/mongodb-odm-bundle": "^4.0"
     },
     "autoload": {
