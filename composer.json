@@ -14,7 +14,7 @@
     ],
     "require": {
         "php": ">=7.1.0",
-        "doesntmattr/mongodb-migrations": "dev-master",
+        "graviton/mongodb-migrations": "^3.0",
         "doctrine/mongodb-odm-bundle": "^4.0"
     },
     "autoload": {
