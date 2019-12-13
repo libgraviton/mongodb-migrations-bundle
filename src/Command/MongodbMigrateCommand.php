@@ -5,6 +5,8 @@
 
 namespace Graviton\MigrationBundle\Command;
 
+use AntiMattr\MongoDB\Migrations\Configuration\ConfigurationBuilder;
+use AntiMattr\MongoDB\Migrations\Migration;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -14,6 +16,7 @@ use Symfony\Component\DependencyInjection\ContainerAwareInterface;
 use Symfony\Component\Finder\Finder;
 use Graviton\MigrationBundle\Command\Helper\DocumentManager as DocumentManagerHelper;
 use AntiMattr\MongoDB\Migrations\OutputWriter;
+use Symfony\Component\Yaml\Yaml;
 
 /**
  * @author   List of contributors <https://github.com/libgraviton/graviton/graphs/contributors>
@@ -105,28 +108,13 @@ class MongodbMigrateCommand extends Command
 
             $output->writeln('Found '.$file->getRelativePathname());
 
-            $command = $this->getApplication()->find('mongodb:migrations:migrate');
-
-            $helperSet = $command->getHelperSet();
-            $helperSet->set($this->documentManager, 'dm');
-            $command->setHelperSet($helperSet);
-
-            $configuration = $this->getConfiguration($file->getPathname(), $output);
-            self::injectContainerToMigrations($this->container, $configuration->getMigrations());
-            $command->setMigrationConfiguration($configuration);
-
-            $arguments = $input->getArguments();
-            $arguments['command'] = 'mongodb:migrations:migrate';
-            $arguments['--configuration'] = $file->getPathname();
-
-            $migrateInput = new ArrayInput($arguments);
-            $migrateInput->setInteractive($input->isInteractive());
-            $returnCode = $command->run($migrateInput, $output);
-
-            if ($returnCode !== 0) {
+            try {
+                $this->runMigration($file->getPathname(), $output);
+            } catch (\Exception $e) {
                 $this->errors[] = sprintf(
-                    'Calling mongodb:migrations:migrate failed for %s',
-                    $file->getRelativePathname()
+                    'Error in migrations from "%s" (message "%s")',
+                    $file->getRelativePathname(),
+                    $e->getMessage()
                 );
             }
         }
@@ -142,17 +130,14 @@ class MongodbMigrateCommand extends Command
     }
 
     /**
-     * get configration object for migration script
-     *
-     * This is based on antromattr/mongodb-migartion code but extends it so we can inject
-     * non local stuff centrally.
+     * runs a migration based on the file
      *
      * @param string $filepath path to configuration file
      * @param Output $output   ouput interface need by config parser to do stuff
      *
      * @return AntiMattr\MongoDB\Migrations\Configuration\Configuration
      */
-    private function getConfiguration($filepath, $output)
+    private function runMigration($filepath, $output)
     {
         $outputWriter = new OutputWriter(
             function ($message) use ($output) {
@@ -160,36 +145,23 @@ class MongodbMigrateCommand extends Command
             }
         );
 
-        $info = pathinfo($filepath);
-        $namespace = 'AntiMattr\MongoDB\Migrations\Configuration';
-        $class = $info['extension'] === 'xml' ? 'XmlConfiguration' : 'YamlConfiguration';
-        $class = sprintf('%s\%s', $namespace, $class);
-        $configuration = new $class($this->documentManager->getDocumentManager()->getConnection(), $outputWriter);
+        // write missing details to yml file and save to tmp
+        $migrationData = Yaml::parseFile($filepath);
+        $migrationData['database'] = $this->databaseName;
 
-        // register databsae name before loading to ensure that loading does not fail
-        $configuration->setMigrationsDatabaseName($this->databaseName);
+        // save to temp file
+        $ymlConfigurationPath = tempnam(sys_get_temp_dir(), 'mig').'.yml';
+        file_put_contents(
+            $ymlConfigurationPath,
+            Yaml::dump($migrationData)
+        );
 
-        // load additional config from migrations.(yml|xml)
-        $configuration->load($filepath);
+        $configurationBuilder = ConfigurationBuilder::create();
+        $configurationBuilder->setOnDiskConfiguration($ymlConfigurationPath);
+        $configurationBuilder->setOutputWriter($outputWriter);
+        $configurationBuilder->setConnection($this->documentManager->getDocumentManager()->getClient());
 
-        return $configuration;
-    }
-
-    /**
-     * Injects the container to migrations aware of it
-     *
-     * @param ContainerInterface $container container to inject into container aware migrations
-     * @param array              $versions  versions that might need injecting a container
-     *
-     * @return void
-     */
-    private static function injectContainerToMigrations(ContainerInterface $container, array $versions)
-    {
-        foreach ($versions as $version) {
-            $migration = $version->getMigration();
-            if ($migration instanceof ContainerAwareInterface) {
-                $migration->setContainer($container);
-            }
-        }
+        $migration = new Migration($configurationBuilder->build());
+        $migration->migrate();
     }
 }
